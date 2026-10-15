@@ -95,6 +95,7 @@ button:disabled { opacity: 0.5; }
 .principal { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 18px; width: min(100%, 26em); }
 .principal > :first-child { justify-self: end; }
 .principal > :last-child { justify-self: start; }
+.finalizar { background: var(--rec); color: #fff; border-color: transparent; font-size: 17px; min-height: 50px; padding: 0 24px; }
 .rec-btn { width: 76px; height: 76px; border-radius: 50%; border: 4px solid #fff; background: transparent; padding: 0; display: grid; place-items: center; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .rec-btn::after { content: ""; width: 58px; height: 58px; border-radius: 50%; background: var(--rec); transition: all 0.2s ease; }
 .rec-btn.on::after { width: 30px; height: 30px; border-radius: 7px; }
@@ -155,6 +156,7 @@ button:disabled { opacity: 0.5; }
     <button id="painelBtn" type="button">Painel ↕</button>
     <button id="espelhoBtn" type="button" aria-pressed="true">Espelho</button>
   </div>
+  <button id="finalizarBtn" class="finalizar" type="button" hidden>■ Finalizar gravação</button>
   <div class="principal">
     <button id="textoBtn" type="button">Texto</button>
     <button id="recBtn" class="rec-btn" type="button" aria-label="Gravar"></button>
@@ -170,7 +172,7 @@ button:disabled { opacity: 0.5; }
     <ol>
       <li>Celular em pé, apoiado na altura dos olhos. Leia perto do alto da tela, junto da lente.</li>
       <li>Toque no botão vermelho: a gravação começa e, depois de 3 segundos, o texto anda. Toque no texto para pausar a rolagem.</li>
-      <li>Toque de novo no botão vermelho para parar. No fim do texto, a gravação para sozinha depois de 2 segundos.</li>
+      <li>Para encerrar, toque em "■ Finalizar gravação": a gravação para e abre a tela para salvar o vídeo. No fim do texto, a gravação também para sozinha depois de 2 segundos.</li>
       <li>Em "Tomadas", salve cada vídeo (no iPhone, escolha "Salvar vídeo"). O que não for salvo some quando a página fecha.</li>
     </ol>
     <p class="erro" id="introErro" role="alert" hidden></p>
@@ -412,6 +414,7 @@ button:disabled { opacity: 0.5; }
 
   /* ---------- gravação ---------- */
   var rec = null, pedacos = [], gravando = false, inicioRec = 0, contagem = null, relogio = null, lock = null, tomadas = [];
+  var abrirTomadasAoGuardar = false;
   function formato() {
     if (!window.MediaRecorder) return null;
     var c = ["video/mp4;codecs=avc1.42E01E,mp4a.40.2", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
@@ -452,13 +455,14 @@ button:disabled { opacity: 0.5; }
     var tipo = (rec && rec.mimeType) || "video/mp4";
     var blob = new Blob(pedacos, { type: tipo });
     pedacos = [];
-    if (!blob.size) { aviso("A tomada saiu vazia. Tente gravar de novo."); return; }
+    if (!blob.size) { abrirTomadasAoGuardar = false; aviso("A tomada saiu vazia. Tente gravar de novo."); return; }
     var n = tomadas.length + 1, d = new Date();
     var ext = /mp4/.test(tipo) ? "mp4" : "webm";
     var nome = "RDG-gravacao-" + d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()) + "-" + p2(d.getHours()) + p2(d.getMinutes()) + "-tomada" + n + "." + ext;
     tomadas.push({ n: n, blob: blob, nome: nome, dur: (performance.now() - inicioRec) / 1000, salva: false, url: URL.createObjectURL(blob) });
     renderTomadas();
-    aviso("Tomada " + n + " gravada. Salve em Tomadas.");
+    if (abrirTomadasAoGuardar) { abrirTomadasAoGuardar = false; $("painelTomadas").hidden = false; }
+    else aviso("Tomada " + n + " gravada. Salve em Tomadas.");
   }
   function pararTudo() {
     if (contagem) { clearInterval(contagem); contagem = null; $("count").hidden = true; }
@@ -467,6 +471,7 @@ button:disabled { opacity: 0.5; }
     gravando = false;
     clearInterval(relogio);
     $("pillRec").hidden = true;
+    $("finalizarBtn").hidden = true;
     $("recBtn").classList.remove("on");
     $("recBtn").setAttribute("aria-label", "Gravar");
   }
@@ -477,6 +482,7 @@ button:disabled { opacity: 0.5; }
     if (!iniciarGravacao()) return;
     $("recBtn").classList.add("on");
     $("recBtn").setAttribute("aria-label", "Parar gravação");
+    $("finalizarBtn").hidden = false;
     u = 0; apply(); $("fim").hidden = true;
     var n = CONTAGEM_S, c = $("count");
     c.textContent = n; c.hidden = false;
@@ -487,6 +493,12 @@ button:disabled { opacity: 0.5; }
     }, 1000);
   }
   $("recBtn").addEventListener("click", gravar);
+  $("finalizarBtn").addEventListener("click", function () {
+    var tinhaGravacao = gravando;
+    abrirTomadasAoGuardar = tinhaGravacao;
+    pararTudo();
+    if (!tinhaGravacao) { renderTomadas(); $("painelTomadas").hidden = false; }
+  });
   document.addEventListener("visibilitychange", function () { if (document.hidden && (gravando || contagem)) pararTudo(); });
   window.addEventListener("beforeunload", function (e) {
     if (tomadas.some(function (t) { return !t.salva; })) { e.preventDefault(); e.returnValue = ""; }
@@ -517,7 +529,7 @@ button:disabled { opacity: 0.5; }
     ul.textContent = "";
     $("tomadasBtn").textContent = "Tomadas (" + tomadas.length + ")";
     $("tomadasNota").textContent = tomadas.length ? "As tomadas ficam só nesta página até você salvar. Salve cada uma antes de fechar." : "Nenhuma tomada gravada ainda.";
-    tomadas.forEach(function (t) {
+    tomadas.slice().reverse().forEach(function (t) {
       var li = document.createElement("li");
       var info = document.createElement("div");
       var a = document.createElement("div"); a.className = "t"; a.textContent = "Tomada " + t.n + (t.salva ? " · salva" : "");
