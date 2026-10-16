@@ -12,7 +12,7 @@
 <title>Teleprompter com Câmera</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Sans+Condensed:wght@500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Sans+Condensed:wght@500;600&family=Poppins:wght@600;700&family=Playfair+Display&display=swap">
 <style>
 /* Layout: câmera frontal em tela cheia; painel de leitura semitransparente colado no alto (perto da lente); controles no rodapé.
    Folhas por cima: abertura, texto, tomadas (com o pedido de edição) e editor de uma tomada. Visual único escuro, cores do escritório. */
@@ -99,6 +99,8 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
 .grupo { display: flex; align-items: center; background: var(--btn); border: 1px solid var(--hair); border-radius: 10px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 .grupo button { background: transparent; border: 0; min-width: 38px; padding: 0 8px; font-size: 17px; -webkit-backdrop-filter: none; backdrop-filter: none; }
 .grupo output { min-width: 4.4em; text-align: center; font-size: 13px; color: var(--dim); font-variant-numeric: tabular-nums; }
+#gerAjuste { justify-self: start; }
+#gerAjuste output { min-width: 7.5em; }
 .grupo output b { color: var(--fg); }
 .principal { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 18px; width: min(100%, 26em); }
 .principal > :first-child { justify-self: end; }
@@ -153,6 +155,15 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
 .cortes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .cortes li { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; font-size: 15px; }
 .cortes li button { min-height: 34px; font-size: 14px; }
+
+.tela-gerar { display: block; height: 56vh; width: auto; max-width: 100%; aspect-ratio: 9 / 16; margin-inline: auto; background: var(--black); border-radius: 12px; }
+.ger-fonte { position: absolute; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
+.barra { height: 8px; border-radius: 999px; background: var(--panel); overflow: hidden; }
+.barra > div { height: 100%; width: 0; background: var(--accent); }
+.blocos { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; max-height: 40vh; overflow-y: auto; }
+.blocos li { display: grid; grid-template-columns: 4.2em minmax(0, 1fr); gap: 8px; align-items: center; }
+.blocos label { font-variant-numeric: tabular-nums; color: var(--dim); font-size: 14px; }
+.folha details summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 15px; padding: 6px 0; }
 </style>
 </head>
 <body>
@@ -210,7 +221,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
       <li>Toque no botão vermelho: a gravação começa e, depois de 3 segundos, o texto anda. Toque na faixa ou abaixo dela para pausar ou continuar.</li>
       <li>Errou? Toque no texto de cima, o que já passou: ele volta para o começo da frase, espera 1 segundo e segue. Repita a frase inteira. A repetição sai na edição.</li>
       <li>Para encerrar, toque em "■ Finalizar gravação". No fim do texto, a gravação também para sozinha depois de 2 segundos.</li>
-      <li>Em "Tomadas", toque em Editar para marcar começo, fim e trechos a cortar e escolher a tomada boa. Depois, "Enviar para o Claude": escolha o Drive e a pasta GRAVACOES-TELEPROMPTER. Vai o arquivo original, sem perder qualidade.</li>
+      <li>Em "Tomadas", toque em Editar para marcar começo, fim e trechos a cortar e escolher a tomada boa. Depois escolha: "Gerar vídeo aqui" faz o vídeo pronto no próprio celular (tira as repetições onde você voltou a frase, as pausas longas, põe aproximações, legenda e capa); "Enviar para o Claude" manda o original pelo Drive, pasta GRAVACOES-TELEPROMPTER, para o acabamento no computador.</li>
     </ol>
     <fieldset>
       <legend>Resolução da gravação</legend>
@@ -289,10 +300,14 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
       <label for="oObs">Observações para a edição
         <textarea id="oObs" class="curta" maxlength="2000"></textarea>
       </label>
-      <p class="nota">Na tela que abrir, toque em Drive e salve na pasta GRAVACOES-TELEPROMPTER. Depois avise o Claude: "chegaram as gravações".</p>
+      <p class="nota">Gerar aqui: o próprio celular faz o vídeo pronto (cortes, pausas, aproximações, legenda e capa). Leva mais ou menos o tempo do vídeo. Usa uma tomada por vez: a marcada como boa.</p>
+      <p class="nota">Enviar para o Claude: na tela que abrir, toque em Drive e salve na pasta GRAVACOES-TELEPROMPTER. Depois avise o Claude: "chegaram as gravações".</p>
       <p class="erro" id="envioErro" role="alert" hidden></p>
       <p class="okmsg" id="envioOk" role="status" hidden></p>
-      <div class="acoes"><button class="primary" id="enviarBtn" type="button">Enviar para o Claude</button></div>
+      <div class="acoes">
+        <button class="primary" id="gerarAquiBtn" type="button">Gerar vídeo aqui</button>
+        <button id="enviarBtn" type="button">Enviar para o Claude</button>
+      </div>
     </section>
 
     <div class="acoes"><button id="tomadasFechar" type="button">Voltar para a câmera</button></div>
@@ -338,6 +353,36 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
   </div>
 </section>
 
+<section class="folha" id="painelGerar" hidden aria-labelledby="gerTitulo">
+  <div class="folha-inner">
+    <h2 id="gerTitulo">Vídeo pronto</h2>
+    <canvas class="tela-gerar" id="gerTela" width="1080" height="1920"></canvas>
+    <video class="tela-gerar" id="gerResultado" controls playsinline hidden></video>
+    <div class="barra" id="gerBarra" hidden><div id="gerBarraIn"></div></div>
+    <p class="nota" id="gerStatus" role="status"></p>
+    <p class="erro" id="gerErro" role="alert" hidden></p>
+    <div class="grupo" id="gerAjuste" role="group" aria-label="Sincronia da legenda" hidden>
+      <button id="gerMenos" type="button" aria-label="Legenda mais cedo">−</button>
+      <output id="gerAjusteOut">legenda 0,0 s</output>
+      <button id="gerMais" type="button" aria-label="Legenda mais tarde">+</button>
+    </div>
+    <details id="gerLegendas" hidden>
+      <summary>Conferir o texto da legenda</summary>
+      <p class="nota">A legenda sai do roteiro. Se você falou diferente em algum ponto, corrija aqui. O botão − adianta e o + atrasa a legenda inteira.</p>
+      <ol class="blocos" id="gerBlocos"></ol>
+    </details>
+    <div class="acoes">
+      <button class="primary" id="gerGerar" type="button" hidden>Gerar vídeo</button>
+      <button id="gerCancelar" type="button" hidden>Cancelar</button>
+      <button class="primary" id="gerCompartilhar" type="button" hidden>Compartilhar vídeo</button>
+      <button id="gerCapa" type="button" hidden>Compartilhar capa</button>
+      <button id="gerDeNovo" type="button" hidden>Ajustar e gerar de novo</button>
+      <button id="gerVoltar" type="button">Voltar</button>
+    </div>
+  </div>
+</section>
+
+<script src="video-rdg.js?v=2"></script>
 <script>
 (function () {
   "use strict";
@@ -390,6 +435,16 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
   var resolucao = store.get("res", "fhd") === "k4" ? "k4" : "fhd";
 
   /* ---------- texto vindo do link (#t=...) ou guardado no aparelho ---------- */
+  /* capa, dúvida e destaques escolhidos no editor do teleprompter (opcionais): pré-preenchem o pedido de edição */
+  function extrasDoLink(o) {
+    function linha(s, max) { return typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, max) : ""; }
+    var e = {}, capa = linha(o.capa, 120), duvida = linha(o.duvida, 160);
+    var destaques = (Array.isArray(o.destaques) ? o.destaques : []).map(function (d) { return linha(d, 60); }).filter(Boolean).slice(0, 8);
+    if (capa) e.capa = capa;
+    if (duvida) e.duvida = duvida;
+    if (destaques.length) e.destaques = destaques;
+    return e;
+  }
   function lerHash() {
     var m = location.hash.match(/^#t=([A-Za-z0-9_-]+)$/);
     if (!m) return null;
@@ -400,7 +455,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
       var o = JSON.parse(new TextDecoder().decode(bytes));
       history.replaceState(null, "", location.pathname + location.search);
       if (o && typeof o.texto === "string" && o.texto.trim()) {
-        return { titulo: String(o.titulo || "Roteiro").slice(0, 120), texto: o.texto.slice(0, 20000) };
+        return Object.assign({ titulo: String(o.titulo || "Roteiro").slice(0, 120), texto: o.texto.slice(0, 20000) }, extrasDoLink(o));
       }
     } catch (e) { /* link quebrado: segue com o texto guardado */ }
     return null;
@@ -535,6 +590,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
     var andava = rolando || retoma !== null;
     pausarRolagem();
     u = inicioDaLinha(words[frases[f]].start);
+    pularAte = frases[f]; palavraLog = -1;   // a leitura recomeça no começo da frase, não no começo da linha
     $("fim").hidden = true;
     apply();
     var primeira = words[frases[f]].el;
@@ -640,12 +696,22 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
 
   /* ---------- gravação ---------- */
   var rec = null, gravando = false, inicioRec = 0, contagem = null, relogio = null, lock = null, tomadas = [];
-  var marcas = null, fraseLog = -1, abrirTomadasAoGuardar = false;
+  var marcas = null, fraseLog = -1, palavraLog = -1, pularAte = -1, abrirTomadasAoGuardar = false;
   function tempoRec() { return Math.round((performance.now() - inicioRec) / 100) / 10; }
+  function palavraEm(x) {
+    var a = 0, b = words.length - 1;
+    while (a < b) { var m = (a + b + 1) >> 1; if (words[m].start <= x + 1e-6) a = m; else b = m - 1; }
+    return a;
+  }
+  /* Registra quando cada frase e cada palavra passam na faixa: é com isso que o editor do celular põe a legenda no tempo.
+     Depois de voltar a frase, o pedaço da linha antes do começo da frase não foi falado de novo: não entra no registro. */
   function registraFrase() {
     if (!gravando || !marcas || !frases.length) return;
     var f = fraseEm(u);
     if (f !== fraseLog) { fraseLog = f; marcas.frases.push([tempoRec(), f]); }
+    var i = palavraEm(u);
+    if (pularAte >= 0) { if (i < pularAte) return; pularAte = -1; }
+    if (i !== palavraLog) { palavraLog = i; marcas.palavras.push([Math.round(performance.now() - inicioRec) / 1000, i]); }
   }
   function formato() {
     if (!window.MediaRecorder) return null;
@@ -675,7 +741,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
     catch (e) { try { r = new MediaRecorder(stream); } catch (e2) { aviso("Não foi possível começar a gravar neste navegador.", 6000); return false; } }
     var ctx = {
       rec: r, pedacos: [], inicio: performance.now(), quando: new Date(),
-      marcas: { voltas: [], frases: [] }, roteiro: roteiro,
+      marcas: { voltas: [], frases: [], palavras: [] }, roteiro: roteiro,
       video: { largura: cfgVideo.width || null, altura: cfgVideo.height || null, fps: cfgVideo.frameRate ? Math.round(cfgVideo.frameRate) : null }
     };
     r.ondataavailable = function (ev) { if (ev.data && ev.data.size) ctx.pedacos.push(ev.data); };
@@ -683,7 +749,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
     r.start(1000);
     rec = r;
     marcas = ctx.marcas;
-    fraseLog = -1;
+    fraseLog = -1; palavraLog = -1; pularAte = -1;
     gravando = true;
     inicioRec = ctx.inicio;
     $("pillRec").hidden = false;
@@ -703,7 +769,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
     tomadas.push({
       n: n, blob: blob, nome: nome, url: URL.createObjectURL(blob), dur: (performance.now() - ctx.inicio) / 1000,
       salva: false, enviada: false, enviar: null, roteiro: ctx.roteiro, video: ctx.video,
-      voltas: ctx.marcas.voltas, frases: ctx.marcas.frases,
+      voltas: ctx.marcas.voltas, frases: ctx.marcas.frases, palavras: ctx.marcas.palavras,
       ed: { ini: 0, fim: null, cortes: [], boa: false, nota: "" }
     });
     renderTomadas();
@@ -752,7 +818,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
   window.addEventListener("beforeunload", function (e) {
     if (tomadas.some(function (t) { return !t.salva && !t.enviada; })) { e.preventDefault(); e.returnValue = ""; }
   });
-  function folhaAberta() { return ["intro", "painelTexto", "painelTomadas", "painelEditor"].some(function (id) { return !$(id).hidden; }); }
+  function folhaAberta() { return ["intro", "painelTexto", "painelTomadas", "painelEditor", "painelGerar"].some(function (id) { return !$(id).hidden; }); }
   document.addEventListener("keydown", function (e) {
     var tag = e.target && e.target.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || folhaAberta()) return;
@@ -1012,18 +1078,36 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
 
   /* ---------- pedido de edição e envio (arquivo original + pedido .txt) ---------- */
   var CAMPOS = ["oTitulo", "oDuvida", "oDestaque", "oObs"], CHECKS = ["oErros", "oPausas", "oLegenda", "oZoom", "oCapa"];
+  var sugPedido = {};   // o que veio do editor do teleprompter e já entrou nos campos, para não repor o que você apagou ou trocou
+  function sugestoesDo(r) {
+    r = r || {};
+    return {
+      oTitulo: typeof r.capa === "string" ? r.capa : "",
+      oDuvida: typeof r.duvida === "string" ? r.duvida : "",
+      oDestaque: Array.isArray(r.destaques) ? r.destaques.join(", ").slice(0, 200) : ""
+    };
+  }
   function carregaPedido() {
     var p = store.get("pedido", {}) || {};
     var chave = roteiro ? roteiro.titulo : "";
-    if (p.chave !== chave) { CAMPOS.forEach(function (c) { p[c] = ""; }); p.chave = chave; }
+    if (p.chave !== chave) { CAMPOS.forEach(function (c) { p[c] = ""; }); p.chave = chave; p.sug = {}; }
+    /* capa, dúvida e destaques do editor entram no campo vazio ou que ainda tem a sugestão anterior; o que você digitou fica */
+    var sug = sugestoesDo(roteiro), lembra = Object.assign({}, p.sug);
+    Object.keys(sug).forEach(function (c) {
+      if (!sug[c] || sug[c] === lembra[c]) return;
+      if (!p[c] || p[c] === lembra[c]) p[c] = sug[c];
+      lembra[c] = sug[c];
+    });
+    sugPedido = lembra;
     CAMPOS.forEach(function (c) { $(c).value = p[c] || ""; });
     CHECKS.forEach(function (c) { $(c).checked = p[c] !== false; });
     document.querySelectorAll('input[name="destino"]').forEach(function (r) { r.checked = r.value === (p.destino === "anuncio" ? "anuncio" : "organico"); });
     document.querySelectorAll('input[name="quem"]').forEach(function (r) { r.checked = r.value === (p.quem === "jian" ? "jian" : "thiago"); });
     $("oTitulo").placeholder = chave;
+    guardaPedido();
   }
   function guardaPedido() {
-    var p = { chave: roteiro ? roteiro.titulo : "", destino: destino(), quem: quem() };
+    var p = { chave: roteiro ? roteiro.titulo : "", destino: destino(), quem: quem(), sug: sugPedido };
     CAMPOS.forEach(function (c) { p[c] = $(c).value; });
     CHECKS.forEach(function (c) { p[c] = $(c).checked; });
     store.set("pedido", p);
@@ -1069,19 +1153,31 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
         roteiro: idxRoteiro(t.roteiro), boa: t.ed.boa,
         inicio: r2(t.ed.ini), fim: r2(fimDe(t)), cortes: t.ed.cortes.map(function (c) { return [r2(c[0]), r2(c[1])]; }),
         manter: trechos(t).map(function (s) { return [r2(s[0]), r2(s[1])]; }),
-        voltas: t.voltas, frases: t.frases, nota: t.ed.nota.trim()
+        voltas: t.voltas, frases: t.frases, palavras: t.palavras || [], nota: t.ed.nota.trim()
       };
     });
+    return Object.assign({ versao: 1, origem: "teleprompter-camera", enviado_em: new Date().toISOString() }, opcoesEdicao(),
+      { observacoes: $("oObs").value.trim(), roteiros: roteiros, tomadas: tomadasP, navegador: navigator.userAgent });
+  }
+  function opcoesEdicao() {
     return {
-      versao: 1, origem: "teleprompter-camera", enviado_em: new Date().toISOString(),
       destino: destino(), quem: quem(),
       fazer: { erros: $("oErros").checked, pausas: $("oPausas").checked, legenda: $("oLegenda").checked, aproximacoes: $("oZoom").checked, capa: $("oCapa").checked },
       titulo_capa: $("oTitulo").value.trim(), duvida: $("oDuvida").value.trim(),
-      destaques: $("oDestaque").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean),
-      observacoes: $("oObs").value.trim(),
-      roteiros: roteiros, tomadas: tomadasP, navegador: navigator.userAgent
+      destaques: $("oDestaque").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
     };
   }
+  /* Gerar o vídeo pronto no próprio celular (video-rdg.js): uma tomada por vez, a boa entre as marcadas para ir */
+  $("gerarAquiBtn").addEventListener("click", function () {
+    var sel = tomadas.filter(vaiEnviar);
+    if (!sel.length) { envioMsg(false, "Marque a tomada que vai virar vídeo."); return; }
+    if (!window.RDGVideo) { envioMsg(false, "O editor não carregou. Recarregue a página com internet."); return; }
+    var t = sel.filter(function (x) { return x.ed.boa; })[0] || sel[0];
+    guardaPedido();
+    envioMsg(true, sel.length > 1 ? "Gerando a tomada " + t.n + (t.ed.boa ? " (a boa)" : " (a primeira marcada)") + ". As outras ficam para depois." : "");
+    $("envioOk").hidden = sel.length <= 1;
+    window.RDGVideo.abrir(t, opcoesEdicao(), trechos(t));
+  });
   function textoPedido(p) {
     var L = ["PEDIDO DE EDIÇÃO · Teleprompter RDG", "Enviado em: " + new Date(p.enviado_em).toLocaleString("pt-BR")];
     if (p.roteiros.length) L.push("Roteiro: " + p.roteiros.map(function (r) { return r.titulo; }).join(" | "));
