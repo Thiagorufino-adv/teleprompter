@@ -70,6 +70,8 @@ button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent);
   color: var(--fg); text-shadow: 0 1px 3px var(--shadow), 0 0 2px var(--shadow); overflow-wrap: break-word;
 }
 .script p { margin: 0 0 0.8em; }
+/* "Olhar na lente": coluna estreita e centralizada logo abaixo da câmera frontal; os olhos quase não andam para ler */
+.leitura.lente .script { max-width: 6.2em; text-align: center; }
 .script .em { color: var(--accent); }
 .script .recomeco { color: var(--accent); text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 4px; }
 .guide {
@@ -156,7 +158,11 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
 .cortes li { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; font-size: 15px; }
 .cortes li button { min-height: 34px; font-size: 14px; }
 
-.tela-gerar { display: block; height: 56vh; width: auto; max-width: 100%; aspect-ratio: 9 / 16; margin-inline: auto; background: var(--black); border-radius: 12px; }
+.tela-gerar { display: block; height: 56vh; width: auto; max-width: 100%; margin-inline: auto; background: var(--black); border-radius: 12px; }
+canvas.tela-gerar.deitada { height: auto; width: 100%; }
+canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px dashed var(--accent); outline-offset: 2px; }
+#gerEnquadreBox { display: grid; gap: 12px; }
+#gerAjusteTomada { display: grid; gap: 8px; }
 .ger-fonte { position: absolute; width: 2px; height: 2px; opacity: 0; pointer-events: none; }
 .barra { height: 8px; border-radius: 999px; background: var(--panel); overflow: hidden; }
 .barra > div { height: 100%; width: 0; background: var(--accent); }
@@ -201,6 +207,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
       <button id="opMais" type="button" aria-label="Fundo mais escuro">+</button>
     </div>
     <button id="painelBtn" type="button">Painel ↕</button>
+    <button id="lenteBtn" type="button" aria-pressed="false">Olhar na lente</button>
     <button id="espelhoBtn" type="button" aria-pressed="true">Espelho</button>
   </div>
   <button id="finalizarBtn" class="finalizar" type="button" hidden>■ Finalizar gravação</button>
@@ -220,6 +227,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
       <li>Celular em pé, apoiado na altura dos olhos. Leia perto do alto da tela, junto da lente.</li>
       <li>Toque no botão vermelho: a gravação começa e, depois de 3 segundos, o texto anda. Toque na faixa ou abaixo dela para pausar ou continuar.</li>
       <li>Errou? Toque no texto de cima, o que já passou: ele volta para o começo da frase, espera 1 segundo e segue. Repita a frase inteira. A repetição sai na edição.</li>
+      <li>Para não parecer que está lendo, ligue "Olhar na lente": o texto vira uma coluna estreita colada embaixo da câmera, então os olhos quase não se mexem. Deixe o celular a um braço de distância: quanto mais longe, menos o movimento dos olhos aparece.</li>
       <li>Para encerrar, toque em "■ Finalizar gravação". No fim do texto, a gravação também para sozinha depois de 2 segundos.</li>
       <li>Em "Tomadas", toque em Editar para marcar começo, fim e trechos a cortar e escolher a tomada boa. Depois escolha: "Gerar vídeo aqui" faz o vídeo pronto no próprio celular (tira as repetições onde você voltou a frase, as pausas longas, põe aproximações, legenda e capa); "Enviar para o Claude" manda o original pelo Drive, pasta GRAVACOES-TELEPROMPTER, para o acabamento no computador.</li>
     </ol>
@@ -285,7 +293,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
         <label class="op"><input type="checkbox" id="oErros" checked> Tirar erros e frases repetidas</label>
         <label class="op"><input type="checkbox" id="oPausas" checked> Tirar pausas longas</label>
         <label class="op"><input type="checkbox" id="oLegenda" checked> Legenda</label>
-        <label class="op"><input type="checkbox" id="oZoom" checked> Aproximações e transições de câmera</label>
+        <label class="op"><input type="checkbox" id="oZoom"> Variar as tomadas (aproximações de câmera; desligado = mesma proporção o vídeo todo)</label>
         <label class="op"><input type="checkbox" id="oCapa" checked> Capa</label>
       </fieldset>
       <label for="oTitulo">Título da capa
@@ -361,6 +369,37 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
     <div class="barra" id="gerBarra" hidden><div id="gerBarraIn"></div></div>
     <p class="nota" id="gerStatus" role="status"></p>
     <p class="erro" id="gerErro" role="alert" hidden></p>
+    <div id="gerEnquadreBox" hidden>
+      <fieldset>
+        <legend>Formato</legend>
+        <div class="seg" id="gerFormatos" role="group" aria-label="Formato do vídeo">
+          <button type="button" data-formato="vertical" aria-pressed="true">Vertical 9:16</button>
+          <button type="button" data-formato="feed" aria-pressed="false">Feed 4:5</button>
+          <button type="button" data-formato="youtube" aria-pressed="false">YouTube 16:9</button>
+        </div>
+        <p class="nota" id="gerFormatoNota"></p>
+      </fieldset>
+      <fieldset>
+        <legend>Enquadramento</legend>
+        <p class="nota">A pessoa fica centralizada e do mesmo tamanho em todas as tomadas (o primeiro vídeo gerado vira o padrão).</p>
+        <div class="seg">
+          <button id="gerVariar" type="button" aria-pressed="false">Variar as tomadas</button>
+          <button id="gerAjustar" type="button" aria-pressed="false">Ajustar esta tomada</button>
+        </div>
+        <div id="gerAjusteTomada" hidden>
+          <p class="nota">Arraste o vídeo acima para mover a pessoa. − e + mudam o tamanho. Vale só para esta tomada, a não ser que você salve como padrão.</p>
+          <div class="seg">
+            <div class="grupo" role="group" aria-label="Tamanho da pessoa">
+              <button id="gerZMenos" type="button" aria-label="Pessoa menor">−</button>
+              <output id="gerZOut">tamanho 100%</output>
+              <button id="gerZMais" type="button" aria-label="Pessoa maior">+</button>
+            </div>
+            <button id="gerPadraoSalvar" type="button">Usar como padrão</button>
+            <button id="gerPadraoVoltar" type="button">Voltar ao padrão</button>
+          </div>
+        </div>
+      </fieldset>
+    </div>
     <div class="grupo" id="gerAjuste" role="group" aria-label="Sincronia da legenda" hidden>
       <button id="gerMenos" type="button" aria-label="Legenda mais cedo">−</button>
       <output id="gerAjusteOut">legenda 0,0 s</output>
@@ -375,6 +414,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
       <button class="primary" id="gerGerar" type="button" hidden>Gerar vídeo</button>
       <button id="gerCancelar" type="button" hidden>Cancelar</button>
       <button class="primary" id="gerCompartilhar" type="button" hidden>Compartilhar vídeo</button>
+      <button id="gerArquivo" type="button" hidden>Mandar como arquivo (WhatsApp)</button>
       <button id="gerCapa" type="button" hidden>Compartilhar capa</button>
       <button id="gerDeNovo" type="button" hidden>Ajustar e gerar de novo</button>
       <button id="gerVoltar" type="button">Voltar</button>
@@ -382,7 +422,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
   </div>
 </section>
 
-<script src="video-rdg.js?v=2"></script>
+<script src="video-rdg.js?v=3"></script>
 <script>
 (function () {
   "use strict";
@@ -432,6 +472,8 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
   var op = clamp(store.get("op", 0.45), OP_MIN, OP_MAX);
   var painel = PAINEIS.indexOf(store.get("painel", 42)) >= 0 ? store.get("painel", 42) : 42;
   var espelho = store.get("espelho", true) !== false;
+  var lente = store.get("lente", false) === true;
+  var PAINEL_LENTE = 24;   // % da tela no modo "Olhar na lente": a faixa de leitura fica a poucos centímetros da câmera
   var resolucao = store.get("res", "fhd") === "k4" ? "k4" : "fhd";
 
   /* ---------- texto vindo do link (#t=...) ou guardado no aparelho ---------- */
@@ -627,7 +669,9 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
   function mostraAjustes() {
     root.style.setProperty("--fs", fs + "px");
     root.style.setProperty("--op", String(op));
-    root.style.setProperty("--ph", painel + "%");
+    root.style.setProperty("--ph", (lente ? PAINEL_LENTE : painel) + "%");
+    $("leitura").classList.toggle("lente", lente);
+    $("lenteBtn").setAttribute("aria-pressed", String(lente));
     $("speedOut").innerHTML = "<b>" + speed + "%</b> ritmo";
     $("opOut").innerHTML = "<b>" + Math.round(op * 100) + "%</b> fundo";
     $("cam").classList.toggle("espelho", espelho);
@@ -635,15 +679,18 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
     $("resFhd").setAttribute("aria-pressed", String(resolucao === "fhd"));
     $("res4k").setAttribute("aria-pressed", String(resolucao === "k4"));
   }
-  function ajusta(fn) { fn(); store.set("speed", speed); store.set("fs", fs); store.set("op", op); store.set("painel", painel); store.set("espelho", espelho); store.set("res", resolucao); mostraAjustes(); relayout(); }
+  function ajusta(fn) { fn(); store.set("speed", speed); store.set("fs", fs); store.set("op", op); store.set("painel", painel); store.set("espelho", espelho); store.set("res", resolucao); store.set("lente", lente); mostraAjustes(); relayout(); }
   $("slower").addEventListener("click", function () { ajusta(function () { speed = clamp(speed - SPEED_STEP, SPEED_MIN, SPEED_MAX); }); });
   $("faster").addEventListener("click", function () { ajusta(function () { speed = clamp(speed + SPEED_STEP, SPEED_MIN, SPEED_MAX); }); });
   $("smaller").addEventListener("click", function () { ajusta(function () { fs = clamp(fs - FS_STEP, FS_MIN, FS_MAX); }); });
   $("bigger").addEventListener("click", function () { ajusta(function () { fs = clamp(fs + FS_STEP, FS_MIN, FS_MAX); }); });
   $("opMenos").addEventListener("click", function () { ajusta(function () { op = clamp(Math.round((op - OP_STEP) * 100) / 100, OP_MIN, OP_MAX); }); });
   $("opMais").addEventListener("click", function () { ajusta(function () { op = clamp(Math.round((op + OP_STEP) * 100) / 100, OP_MIN, OP_MAX); }); });
-  $("painelBtn").addEventListener("click", function () { ajusta(function () { painel = PAINEIS[(PAINEIS.indexOf(painel) + 1) % PAINEIS.length]; }); });
+  $("painelBtn").addEventListener("click", function () {
+    ajusta(function () { if (lente) lente = false; else painel = PAINEIS[(PAINEIS.indexOf(painel) + 1) % PAINEIS.length]; });   // no modo lente, "Painel" volta ao painel normal
+  });
   $("espelhoBtn").addEventListener("click", function () { ajusta(function () { espelho = !espelho; }); });
+  $("lenteBtn").addEventListener("click", function () { ajusta(function () { lente = !lente; }); });
   $("resFhd").addEventListener("click", function () { ajusta(function () { resolucao = "fhd"; }); });
   $("res4k").addEventListener("click", function () { ajusta(function () { resolucao = "k4"; }); });
 
@@ -1100,7 +1147,8 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
     });
     sugPedido = lembra;
     CAMPOS.forEach(function (c) { $(c).value = p[c] || ""; });
-    CHECKS.forEach(function (c) { $(c).checked = p[c] !== false; });
+    // "Variar as tomadas" começa desligado (mesma proporção o vídeo todo, pedido de 16/10/2026); chave nova para não herdar o antigo "ligado"
+    CHECKS.forEach(function (c) { $(c).checked = c === "oZoom" ? p.variarTomadas === true : p[c] !== false; });
     document.querySelectorAll('input[name="destino"]').forEach(function (r) { r.checked = r.value === (p.destino === "anuncio" ? "anuncio" : "organico"); });
     document.querySelectorAll('input[name="quem"]').forEach(function (r) { r.checked = r.value === (p.quem === "jian" ? "jian" : "thiago"); });
     $("oTitulo").placeholder = chave;
@@ -1110,6 +1158,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
     var p = { chave: roteiro ? roteiro.titulo : "", destino: destino(), quem: quem(), sug: sugPedido };
     CAMPOS.forEach(function (c) { p[c] = $(c).value; });
     CHECKS.forEach(function (c) { p[c] = $(c).checked; });
+    p.variarTomadas = $("oZoom").checked;
     store.set("pedido", p);
   }
   function destino() { var r = document.querySelector('input[name="destino"]:checked'); return r ? r.value : "organico"; }
