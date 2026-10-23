@@ -8,6 +8,8 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Teleprompter">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
 <meta name="robots" content="noindex">
 <title>Teleprompter com Câmera</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -208,6 +210,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     </div>
     <button id="painelBtn" type="button">Painel ↕</button>
     <button id="lenteBtn" type="button" aria-pressed="false">Olhar na lente</button>
+    <button id="vozBtn" type="button" aria-pressed="false">Voz</button>
     <button id="espelhoBtn" type="button" aria-pressed="true">Espelho</button>
   </div>
   <button id="finalizarBtn" class="finalizar" type="button" hidden>■ Finalizar gravação</button>
@@ -228,6 +231,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
       <li>Toque no botão vermelho: a gravação começa e, depois de 3 segundos, o texto anda. Toque na faixa ou abaixo dela para pausar ou continuar.</li>
       <li>Errou? Toque no texto de cima, o que já passou: ele volta para o começo da frase, espera 1 segundo e segue. Repita a frase inteira. A repetição sai na edição.</li>
       <li>Para não parecer que está lendo, ligue "Olhar na lente": o texto vira uma coluna estreita colada embaixo da câmera, então os olhos quase não se mexem. Deixe o celular a um braço de distância: quanto mais longe, menos o movimento dos olhos aparece.</li>
+      <li>Quer que o texto acompanhe a sua fala? Ligue "Voz": durante a gravação ele anda quando você lê e espera quando você para. Precisa de internet; sem voz, o texto anda pelo ritmo.</li>
       <li>Para encerrar, toque em "■ Finalizar gravação". No fim do texto, a gravação também para sozinha depois de 2 segundos.</li>
       <li>Em "Tomadas", toque em Editar para marcar começo, fim e trechos a cortar e escolher a tomada boa. Depois escolha: "Gerar vídeo aqui" faz o vídeo pronto no próprio celular (tira as repetições onde você voltou a frase, as pausas longas, põe aproximações, legenda e capa); "Enviar para o Claude" manda o original pelo Drive, pasta GRAVACOES-TELEPROMPTER, para o acabamento no computador.</li>
     </ol>
@@ -239,6 +243,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
       </div>
       <p class="nota">4K deixa as aproximações da edição mais nítidas, mas o arquivo fica umas 3 vezes maior. Se o celular não gravar em 4K, ele usa a maior resolução que tiver. As tomadas ficam na memória do navegador até você enviar ou salvar: envie logo depois de gravar, principalmente em 4K.</p>
     </fieldset>
+    <p class="nota" id="instalarDica">Para usar como aplicativo, com ícone na tela: no Safari do iPhone, toque em Compartilhar e depois em "Adicionar à Tela de Início". No Android, menu do Chrome → "Instalar app".</p>
     <p class="erro" id="introErro" role="alert" hidden></p>
     <div class="acoes">
       <button class="primary" id="ligarBtn" type="button">Ligar a câmera</button>
@@ -423,6 +428,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
 </section>
 
 <script src="video-rdg.js?v=3"></script>
+<script src="voz.js?v=1"></script>
 <script>
 (function () {
   "use strict";
@@ -475,6 +481,8 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   var lente = store.get("lente", false) === true;
   var PAINEL_LENTE = 24;   // % da tela no modo "Olhar na lente": a faixa de leitura fica a poucos centímetros da câmera
   var resolucao = store.get("res", "fhd") === "k4" ? "k4" : "fhd";
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var voz = !!SR && store.get("voz", false) === true;   // texto anda pela fala (voz.js) em vez do ritmo
 
   /* ---------- texto vindo do link (#t=...) ou guardado no aparelho ---------- */
   /* capa, dúvida e destaques escolhidos no editor do teleprompter (opcionais): pré-preenchem o pedido de edição */
@@ -508,6 +516,8 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   /* ---------- motor de rolagem ---------- */
   var words = [], frases = [], lines = [], U_TOTAL = 0, RATE_100 = 1, DUR = 0, guiaTopo = 0;
   var u = 0, rolando = false, last = 0, lastSet = -1, retoma = null;
+  var vozTokens = [], tokenDaPalavra = [], palavraDoToken = [], leitura = null;
+  var ouvido = null, inicioOuvido = 0, reinicios = 0;
 
   function fimDeFrase(t) { return /[.?!…]["'”’»)\]]*$/.test(t); }
   function montar(r) {
@@ -538,6 +548,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     var acc = 0;
     words.forEach(function (w) { w.start = acc; acc += w.u; });
     U_TOTAL = acc;
+    montarVoz();
     DUR = r ? Math.max(5, Math.round(contaPalavras(r.texto) / PALAVRAS_POR_SEG)) : 0;
     RATE_100 = DUR ? U_TOTAL / DUR : 1;
     u = 0;
@@ -599,7 +610,14 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     if (!rolando) return;
     var dt = Math.max(0, Math.min(0.5, (ts - last) / 1000));
     last = ts;
-    u += dt * RATE_100 * speed / 100;
+    if (usandoVoz()) {
+      // com a voz, o texto vai até a próxima palavra a ler e espera a fala
+      var alvo = alvoVoz();
+      u += (alvo - u) * Math.min(1, dt * 6);
+      if (alvo >= U_TOTAL && U_TOTAL - u < 0.05) u = U_TOTAL;
+    } else {
+      u += dt * RATE_100 * speed / 100;
+    }
     if (u >= U_TOTAL) { u = U_TOTAL; apply(); fimDoTexto(); return; }
     apply();
     registraFrase();
@@ -612,6 +630,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   }
   function fimDoTexto() {
     rolando = false;
+    pararVoz();
     $("fim").hidden = false;
     if (gravando) setTimeout(function () { if (gravando && u >= U_TOTAL) pararTudo(); }, CAUDA_MS);
   }
@@ -632,6 +651,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     var andava = rolando || retoma !== null;
     pausarRolagem();
     u = inicioDaLinha(words[frases[f]].start);
+    vozPara(frases[f]);
     pularAte = frases[f]; palavraLog = -1;   // a leitura recomeça no começo da frase, não no começo da linha
     $("fim").hidden = true;
     apply();
@@ -647,9 +667,76 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     if (contagem) return;
     if (rolando || retoma) pausarRolagem(); else if (gravando) rolar();
   }
+
+  /* ---------- rolagem por voz ----------
+     O reconhecimento roda da gravação até o fim dela (pausar o texto não para de ouvir).
+     Quem move o texto é o frame(): com a voz ligada ele vai até a próxima palavra ainda não falada. */
+  function montarVoz() {
+    vozTokens = []; tokenDaPalavra = []; palavraDoToken = [];
+    words.forEach(function (w, i) {
+      tokenDaPalavra.push(vozTokens.length);
+      window.Voz.tokenizar(w.el.textContent).forEach(function (t) { vozTokens.push(t); palavraDoToken.push(i); });
+    });
+    leitura = new window.Voz.Leitura(vozTokens);
+  }
+  function usandoVoz() { return voz && !!leitura && vozTokens.length > 0; }
+  function alvoVoz() {
+    var c = leitura.cursor;
+    return c >= vozTokens.length ? U_TOTAL : words[palavraDoToken[c]].start;
+  }
+  /* o texto foi levado para a palavra i (voltar a frase, arrastar, nova gravação): a voz segue dali */
+  function vozPara(i) {
+    if (usandoVoz() && i >= 0 && i < tokenDaPalavra.length) leitura.posicionar(tokenDaPalavra[i]);
+  }
+  function iniciarVoz() {
+    if (!usandoVoz() || !gravando || ouvido) return;
+    var r = new SR();
+    r.lang = "pt-BR";
+    r.continuous = true;
+    r.interimResults = true;
+    r.maxAlternatives = 1;
+    r.onresult = function (ev) {
+      if (ouvido !== r) return;
+      var t = "";
+      for (var i = 0; i < ev.results.length; i++) t += " " + ev.results[i][0].transcript;
+      leitura.atualizar(t);
+    };
+    r.onerror = function (ev) {
+      if (ouvido !== r) return;
+      if (ev.error === "not-allowed" || ev.error === "service-not-allowed") desligarVoz("Libere o microfone e o reconhecimento de fala para usar a voz. O texto segue pelo ritmo.");
+      else if (ev.error === "network") aviso("A rolagem por voz precisa de internet.", 4000);
+    };
+    r.onend = function () {
+      if (ouvido !== r) return;
+      ouvido = null;
+      if (!gravando || !voz) return;
+      // o navegador encerra o reconhecimento sozinho depois de uma pausa: recomeça, mantendo o ponto do texto
+      reinicios = performance.now() - inicioOuvido < 1500 ? reinicios + 1 : 0;
+      if (reinicios >= 3) { desligarVoz("O reconhecimento de voz parou. O texto segue pelo ritmo."); return; }
+      setTimeout(iniciarVoz, 200);
+    };
+    leitura.novaSessao();
+    ouvido = r;
+    inicioOuvido = performance.now();
+    try { r.start(); } catch (e) { ouvido = null; }
+  }
+  function pararVoz() {
+    if (!ouvido) return;
+    var r = ouvido;
+    ouvido = null;          // antes do abort: o onend desta sessão não recomeça
+    try { r.abort(); } catch (e) { /* já parado */ }
+  }
+  function desligarVoz(msg) {
+    pararVoz();
+    voz = false;
+    store.set("voz", false);
+    mostraAjustes();
+    aviso(msg, 6000);
+  }
   scroller.addEventListener("scroll", function () {
     if (rolando || Math.abs(scroller.scrollTop - lastSet) < 2) return;
     u = uAt(scroller.scrollTop);
+    vozPara(palavraEm(u));
     lastSet = scroller.scrollTop;
     $("fim").hidden = u < U_TOTAL;
   }, { passive: true });
@@ -672,6 +759,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     root.style.setProperty("--ph", (lente ? PAINEL_LENTE : painel) + "%");
     $("leitura").classList.toggle("lente", lente);
     $("lenteBtn").setAttribute("aria-pressed", String(lente));
+    $("vozBtn").setAttribute("aria-pressed", String(voz));
     $("speedOut").innerHTML = "<b>" + speed + "%</b> ritmo";
     $("opOut").innerHTML = "<b>" + Math.round(op * 100) + "%</b> fundo";
     $("cam").classList.toggle("espelho", espelho);
@@ -679,7 +767,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     $("resFhd").setAttribute("aria-pressed", String(resolucao === "fhd"));
     $("res4k").setAttribute("aria-pressed", String(resolucao === "k4"));
   }
-  function ajusta(fn) { fn(); store.set("speed", speed); store.set("fs", fs); store.set("op", op); store.set("painel", painel); store.set("espelho", espelho); store.set("res", resolucao); store.set("lente", lente); mostraAjustes(); relayout(); }
+  function ajusta(fn) { fn(); store.set("speed", speed); store.set("fs", fs); store.set("op", op); store.set("painel", painel); store.set("espelho", espelho); store.set("res", resolucao); store.set("lente", lente); store.set("voz", voz); mostraAjustes(); relayout(); }
   $("slower").addEventListener("click", function () { ajusta(function () { speed = clamp(speed - SPEED_STEP, SPEED_MIN, SPEED_MAX); }); });
   $("faster").addEventListener("click", function () { ajusta(function () { speed = clamp(speed + SPEED_STEP, SPEED_MIN, SPEED_MAX); }); });
   $("smaller").addEventListener("click", function () { ajusta(function () { fs = clamp(fs - FS_STEP, FS_MIN, FS_MAX); }); });
@@ -691,6 +779,12 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   });
   $("espelhoBtn").addEventListener("click", function () { ajusta(function () { espelho = !espelho; }); });
   $("lenteBtn").addEventListener("click", function () { ajusta(function () { lente = !lente; }); });
+  $("vozBtn").addEventListener("click", function () {
+    if (!SR) { aviso("Este navegador não tem reconhecimento de voz. No iPhone, use o Safari.", 5000); return; }
+    ajusta(function () { voz = !voz; });
+    if (voz) { vozPara(palavraEm(u)); iniciarVoz(); } else pararVoz();
+    aviso(voz ? "Voz ligada: durante a gravação, o texto anda quando você fala." : "Voz desligada: o texto anda pelo ritmo.", 3000);
+  });
   $("resFhd").addEventListener("click", function () { ajusta(function () { resolucao = "fhd"; }); });
   $("res4k").addEventListener("click", function () { ajusta(function () { resolucao = "k4"; }); });
 
@@ -826,6 +920,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   function pararTudo() {
     if (contagem) { clearInterval(contagem); contagem = null; $("count").hidden = true; }
     pausarRolagem();
+    pararVoz();
     if (rec && rec.state !== "inactive") rec.stop();
     gravando = false;
     marcas = null;
@@ -844,6 +939,8 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     $("recBtn").setAttribute("aria-label", "Parar gravação");
     $("finalizarBtn").hidden = false;
     u = 0; apply(); $("fim").hidden = true;
+    vozPara(0);
+    iniciarVoz();   // começa a ouvir já no toque (o Safari pode exigir o toque) e durante a contagem
     var vistas = store.get("dicaVolta", 0);
     if (vistas < 3) { store.set("dicaVolta", vistas + 1); aviso("Errou? Toque no texto de cima: ele volta para o começo da frase.", 4500); }
     var n = CONTAGEM_S, c = $("count");
@@ -1331,6 +1428,13 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     montar(r);
     carregaPedido();
   });
+
+  /* ---------- aplicativo instalado ---------- */
+  var instalado = window.navigator.standalone === true || (window.matchMedia && matchMedia("(display-mode: standalone)").matches);
+  $("instalarDica").hidden = instalado;
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(function () { /* sem modo offline; o app funciona online */ });
+  }
 
   mostraAjustes();
   montar(roteiro);
