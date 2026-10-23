@@ -123,6 +123,11 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
 .erro { margin: 0; color: var(--danger); font-size: 15px; line-height: 1.5; }
 .okmsg { margin: 0; color: var(--ok); font-size: 15px; line-height: 1.5; }
 .acoes { display: flex; flex-wrap: wrap; gap: 8px; }
+/* "Ligar a câmera" fica sempre à vista no rodapé da tela inicial, sem precisar rolar as instruções */
+.intro-acoes {
+  position: sticky; bottom: calc(-24px - env(safe-area-inset-bottom, 0px));   /* cobre também o respiro de baixo da folha */
+  display: grid; gap: 10px; padding: 10px 0 calc(24px + env(safe-area-inset-bottom, 0px)); background: var(--sheet);
+}
 .folha ol { margin: 0; padding-left: 1.3em; display: grid; gap: 8px; font-size: 15px; line-height: 1.5; color: var(--dim); }
 .folha label { display: grid; gap: 6px; font-size: 14px; color: var(--dim); }
 .folha input:not([type="checkbox"]):not([type="radio"]), .folha textarea { font-family: var(--font-script); font-size: 17px; color: var(--fg); background: var(--panel); border: 1px solid var(--hair); border-radius: 10px; padding: 10px 12px; width: 100%; box-sizing: border-box; }
@@ -244,10 +249,12 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
       <p class="nota">4K deixa as aproximações da edição mais nítidas, mas o arquivo fica umas 3 vezes maior. Se o celular não gravar em 4K, ele usa a maior resolução que tiver. As tomadas ficam na memória do navegador até você enviar ou salvar: envie logo depois de gravar, principalmente em 4K.</p>
     </fieldset>
     <p class="nota" id="instalarDica">Para usar como aplicativo, com ícone na tela: no Safari do iPhone, toque em Compartilhar e depois em "Adicionar à Tela de Início". No Android, menu do Chrome → "Instalar app".</p>
-    <p class="erro" id="introErro" role="alert" hidden></p>
-    <div class="acoes">
-      <button class="primary" id="ligarBtn" type="button">Ligar a câmera</button>
-      <button id="introTextoBtn" type="button">Trocar o texto</button>
+    <div class="intro-acoes">
+      <p class="erro" id="introErro" role="alert" hidden></p>
+      <div class="acoes">
+        <button class="primary" id="ligarBtn" type="button">Ligar a câmera</button>
+        <button id="introTextoBtn" type="button">Trocar o texto</button>
+      </div>
     </div>
   </div>
 </section>
