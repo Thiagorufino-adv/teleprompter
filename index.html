@@ -93,6 +93,7 @@ button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
 .aviso { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(150px + env(safe-area-inset-bottom, 0px)); width: min(90%, 26em); background: var(--panel); border: 1px solid var(--accent); border-radius: 12px; padding: 10px 14px; font-size: 15px; text-align: center; }
 
 .count { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; color: var(--accent); font-family: var(--font-script); font-weight: 700; font-size: min(40vmin, 240px); text-shadow: 0 2px 12px var(--shadow); }
+.count.espera { place-items: end center; padding-bottom: 22vh; font-size: min(8vmin, 40px); font-variant-numeric: tabular-nums; }
 
 .controles {
   position: fixed; left: 0; right: 0; bottom: 0; display: grid; gap: 10px; justify-items: center;
@@ -447,6 +448,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   var LH = 1.3;
   var PAUSA_VIRGULA = 0.4, PAUSA_PONTO = 0.8, PAUSA_PARAGRAFO = 0.8;
   var CONTAGEM_S = 3, CAUDA_MS = 2000;
+  var ESPERA_MAX = 120;   // segundos que o texto pode esperar parado depois da contagem (ex.: o vídeo de referência na tela de cima)
   var VOLTA_TOL = 2;          // em "palavras": se a frase atual começou há menos que isso, o toque volta para a anterior
   var RETOMA_MS = 1200;       // gravando, depois de voltar a frase o texto espera isso e volta a andar
   var CORTE_MIN = 0.2, TRECHO_MIN = 0.5;
@@ -492,14 +494,17 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   var voz = !!SR && store.get("voz", false) === true;   // texto anda pela fala (voz.js) em vez do ritmo
 
   /* ---------- texto vindo do link (#t=...) ou guardado no aparelho ---------- */
-  /* capa, dúvida e destaques escolhidos no editor do teleprompter (opcionais): pré-preenchem o pedido de edição */
+  /* capa, dúvida e destaques escolhidos no editor do teleprompter (opcionais): pré-preenchem o pedido de edição;
+     espera (opcional): segundos em que o texto fica parado depois da contagem */
   function extrasDoLink(o) {
     function linha(s, max) { return typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, max) : ""; }
     var e = {}, capa = linha(o.capa, 120), duvida = linha(o.duvida, 160);
     var destaques = (Array.isArray(o.destaques) ? o.destaques : []).map(function (d) { return linha(d, 60); }).filter(Boolean).slice(0, 8);
+    var espera = Math.round(Number(o.espera));
     if (capa) e.capa = capa;
     if (duvida) e.duvida = duvida;
     if (destaques.length) e.destaques = destaques;
+    if (espera > 0) e.espera = Math.min(ESPERA_MAX, espera);
     return e;
   }
   function lerHash() {
@@ -926,6 +931,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   }
   function pararTudo() {
     if (contagem) { clearInterval(contagem); contagem = null; $("count").hidden = true; }
+    $("count").classList.remove("espera");
     pausarRolagem();
     pararVoz();
     if (rec && rec.state !== "inactive") rec.stop();
@@ -951,11 +957,13 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     var vistas = store.get("dicaVolta", 0);
     if (vistas < 3) { store.set("dicaVolta", vistas + 1); aviso("Errou? Toque no texto de cima: ele volta para o começo da frase.", 4500); }
     var n = CONTAGEM_S, c = $("count");
+    var espera = roteiro && roteiro.espera > 0 ? roteiro.espera : 0;
     c.textContent = n; c.hidden = false;
     contagem = setInterval(function () {
       n -= 1;
-      if (n <= 0) { clearInterval(contagem); contagem = null; c.hidden = true; rolar(); }
-      else c.textContent = n;
+      if (n > 0) { c.textContent = n; return; }
+      if (espera > 0) { c.classList.add("espera"); c.textContent = "texto em " + espera + " s"; espera -= 1; return; }
+      clearInterval(contagem); contagem = null; c.hidden = true; c.classList.remove("espera"); rolar();
     }, 1000);
   }
   $("recBtn").addEventListener("click", gravar);
