@@ -86,6 +86,9 @@ button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent);
 .flash { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 6px); transform: translateX(-50%); background: var(--panel); border: 1px solid var(--accent); color: var(--accent); border-radius: 999px; padding: 5px 14px; font-size: 15px; font-weight: 600; pointer-events: none; }
 
 .status { position: fixed; left: 12px; top: calc(var(--ph) + 10px); display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 13px; }
+/* tela dividida 9:16: a metade de cima é do vídeo de referência; quem fala se enquadra na metade de baixo */
+.divisao { position: fixed; left: 0; right: 0; top: 0; height: 50%; pointer-events: none; background: rgba(0, 0, 0, 0.3); border-bottom: 2px dashed var(--accent); }
+.divisao span { position: absolute; left: 50%; top: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--fg); background: var(--btn); border: 1px solid var(--hair); border-radius: 999px; padding: 3px 10px; }
 .pill { background: var(--btn); border: 1px solid var(--hair); border-radius: 999px; padding: 4px 10px; font-variant-numeric: tabular-nums; }
 button.pill { min-height: 0; font-size: 13px; font-weight: 500; }
 .pill.rec { background: var(--rec); border-color: transparent; color: #fff; font-weight: 600; }
@@ -182,6 +185,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
 </head>
 <body>
 <video id="cam" class="espelho" playsinline muted autoplay></video>
+<div class="divisao" id="divisao" aria-hidden="true" hidden><span>▲ vídeo de referência · você daqui pra baixo ▼</span></div>
 
 <section class="leitura" id="leitura" aria-label="Texto para ler. Toque na faixa ou abaixo dela para pausar ou continuar. Toque no texto de cima para voltar a frase.">
   <div class="scroller" id="scroller"><div class="script" id="script"></div></div>
@@ -218,6 +222,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     <button id="lenteBtn" type="button" aria-pressed="false">Olhar na lente</button>
     <button id="vozBtn" type="button" aria-pressed="false">Voz</button>
     <button id="espelhoBtn" type="button" aria-pressed="true">Espelho</button>
+    <button id="divididaBtn" type="button" aria-pressed="false">Tela dividida</button>
   </div>
   <button id="finalizarBtn" class="finalizar" type="button" hidden>■ Finalizar gravação</button>
   <div class="principal">
@@ -488,6 +493,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   var painel = PAINEIS.indexOf(store.get("painel", 42)) >= 0 ? store.get("painel", 42) : 42;
   var espelho = store.get("espelho", true) !== false;
   var lente = store.get("lente", false) === true;
+  var dividida = store.get("dividida", false) === true;   // guia de tela dividida 9:16; o roteiro do link decide
   var PAINEL_LENTE = 24;   // % da tela no modo "Olhar na lente": a faixa de leitura fica a poucos centímetros da câmera
   var resolucao = store.get("res", "fhd") === "k4" ? "k4" : "fhd";
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -505,6 +511,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     if (duvida) e.duvida = duvida;
     if (destaques.length) e.destaques = destaques;
     if (espera > 0) e.espera = Math.min(ESPERA_MAX, espera);
+    if (o.tela === "dividida") e.tela = "dividida";
     return e;
   }
   function lerHash() {
@@ -523,7 +530,8 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     return null;
   }
   var roteiro = lerHash();
-  if (roteiro) store.set("roteiro", roteiro); else roteiro = store.get("roteiro", null);
+  if (roteiro) { store.set("roteiro", roteiro); dividida = roteiro.tela === "dividida"; store.set("dividida", dividida); }
+  else roteiro = store.get("roteiro", null);
 
   /* ---------- motor de rolagem ---------- */
   var words = [], frases = [], lines = [], U_TOTAL = 0, RATE_100 = 1, DUR = 0, guiaTopo = 0;
@@ -776,10 +784,12 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     $("opOut").innerHTML = "<b>" + Math.round(op * 100) + "%</b> fundo";
     $("cam").classList.toggle("espelho", espelho);
     $("espelhoBtn").setAttribute("aria-pressed", String(espelho));
+    $("divisao").hidden = !dividida;
+    $("divididaBtn").setAttribute("aria-pressed", String(dividida));
     $("resFhd").setAttribute("aria-pressed", String(resolucao === "fhd"));
     $("res4k").setAttribute("aria-pressed", String(resolucao === "k4"));
   }
-  function ajusta(fn) { fn(); store.set("speed", speed); store.set("fs", fs); store.set("op", op); store.set("painel", painel); store.set("espelho", espelho); store.set("res", resolucao); store.set("lente", lente); store.set("voz", voz); mostraAjustes(); relayout(); }
+  function ajusta(fn) { fn(); store.set("speed", speed); store.set("fs", fs); store.set("op", op); store.set("painel", painel); store.set("espelho", espelho); store.set("res", resolucao); store.set("lente", lente); store.set("voz", voz); store.set("dividida", dividida); mostraAjustes(); relayout(); }
   $("slower").addEventListener("click", function () { ajusta(function () { speed = clamp(speed - SPEED_STEP, SPEED_MIN, SPEED_MAX); }); });
   $("faster").addEventListener("click", function () { ajusta(function () { speed = clamp(speed + SPEED_STEP, SPEED_MIN, SPEED_MAX); }); });
   $("smaller").addEventListener("click", function () { ajusta(function () { fs = clamp(fs - FS_STEP, FS_MIN, FS_MAX); }); });
@@ -791,6 +801,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
   });
   $("espelhoBtn").addEventListener("click", function () { ajusta(function () { espelho = !espelho; }); });
   $("lenteBtn").addEventListener("click", function () { ajusta(function () { lente = !lente; }); });
+  $("divididaBtn").addEventListener("click", function () { ajusta(function () { dividida = !dividida; }); });
   $("vozBtn").addEventListener("click", function () {
     if (!SR) { aviso("Este navegador não tem reconhecimento de voz. No iPhone, use o Safari.", 5000); return; }
     ajusta(function () { voz = !voz; });
@@ -1325,7 +1336,8 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
       destino: destino(), quem: quem(),
       fazer: { erros: $("oErros").checked, pausas: $("oPausas").checked, legenda: $("oLegenda").checked, aproximacoes: $("oZoom").checked, capa: $("oCapa").checked },
       titulo_capa: $("oTitulo").value.trim(), duvida: $("oDuvida").value.trim(),
-      destaques: $("oDestaque").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean)
+      destaques: $("oDestaque").value.split(",").map(function (s) { return s.trim(); }).filter(Boolean),
+      tela: dividida ? "dividida" : "cheia", espera: (roteiro && roteiro.espera) || 0
     };
   }
   /* Gerar o vídeo pronto no próprio celular (video-rdg.js): uma tomada por vez, a boa entre as marcadas para ir */
@@ -1334,6 +1346,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     if (!sel.length) { envioMsg(false, "Marque a tomada que vai virar vídeo."); return; }
     if (!window.RDGVideo) { envioMsg(false, "O editor não carregou. Recarregue a página com internet."); return; }
     var t = sel.filter(function (x) { return x.ed.boa; })[0] || sel[0];
+    if (dividida) aviso("Tela dividida: o vídeo de cima entra na edição pelo computador (Enviar para o Claude). Aqui sai só a sua parte.", 6000);
     guardaPedido();
     envioMsg(true, sel.length > 1 ? "Gerando a tomada " + t.n + (t.ed.boa ? " (a boa)" : " (a primeira marcada)") + ". As outras ficam para depois." : "");
     $("envioOk").hidden = sel.length <= 1;
@@ -1344,6 +1357,7 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     if (p.roteiros.length) L.push("Roteiro: " + p.roteiros.map(function (r) { return r.titulo; }).join(" | "));
     L.push("Quem aparece: " + (p.quem === "jian" ? "Jian" : "Thiago"));
     L.push("Formato: " + (p.destino === "anuncio" ? "anúncio de tráfego pago" : "reel orgânico"));
+    if (p.tela === "dividida") L.push("Tela: dividida 9:16 (vídeo de referência em cima, quem fala embaixo)" + (p.espera ? "; o texto esperou " + p.espera + " s no começo" : ""));
     var f = [];
     if (p.fazer.erros) f.push("tirar erros e frases repetidas");
     if (p.fazer.pausas) f.push("tirar pausas longas");
@@ -1440,6 +1454,9 @@ canvas.tela-gerar.arrastando { touch-action: none; cursor: move; outline: 2px da
     if (gravando || contagem) pararTudo();
     roteiro = r;
     store.set("roteiro", r);
+    dividida = r.tela === "dividida";
+    store.set("dividida", dividida);
+    mostraAjustes();
     montar(r);
     carregaPedido();
   });
